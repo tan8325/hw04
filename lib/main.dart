@@ -1,122 +1,367 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp();
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Message Board App',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+        brightness: Brightness.light,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const SplashScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class SplashScreen extends StatelessWidget {
+  const SplashScreen();
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FirebaseAuth.instance.currentUser == null
+              ? const LoginPage()
+              : const HomePage(),
+        ),
+      );
+    });
+
+    return const Scaffold(
+      backgroundColor: Colors.blueAccent,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.message, size: 80, color: Colors.white),
+            SizedBox(height: 20),
+            Text('Message Board', style: TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class LoginPage extends StatefulWidget {
+  const LoginPage();
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+class _LoginPageState extends State<LoginPage> {
+  final email = TextEditingController();
+  final password = TextEditingController();
+  bool loading = false;
+
+  Future<void> login() async {
+    setState(() => loading = true);
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email.text.trim(),
+        password: password.text.trim(),
+      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login failed: $e")));
+    } finally {
+      setState(() => loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      appBar: AppBar(title: const Text("Login")),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+          children: [
+            TextField(controller: email, decoration: const InputDecoration(labelText: "Email")),
+            TextField(controller: password, decoration: const InputDecoration(labelText: "Password"), obscureText: true),
+            const SizedBox(height: 24),
+            loading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(onPressed: login, child: const Text("Login")),
+            TextButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
+              child: const Text("Register here"),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class RegisterPage extends StatefulWidget {
+  const RegisterPage();
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  final email = TextEditingController();
+  final password = TextEditingController();
+  final first = TextEditingController();
+  final last = TextEditingController();
+  bool loading = false;
+
+  Future<void> register() async {
+    setState(() => loading = true);
+    try {
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email.text.trim(),
+        password: password.text.trim(),
+      );
+      await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
+        'firstName': first.text.trim(),
+        'lastName': last.text.trim(),
+        'role': 'user',
+        'registeredAt': Timestamp.now(),
+      });
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Register")),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ListView(
+          children: [
+            TextField(controller: first, decoration: const InputDecoration(labelText: "First Name")),
+            TextField(controller: last, decoration: const InputDecoration(labelText: "Last Name")),
+            TextField(controller: email, decoration: const InputDecoration(labelText: "Email")),
+            TextField(controller: password, decoration: const InputDecoration(labelText: "Password"), obscureText: true),
+            const SizedBox(height: 24),
+            loading
+                ? const Center(child: CircularProgressIndicator())
+                : ElevatedButton(onPressed: register, child: const Text("Register")),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HomePage extends StatelessWidget {
+  const HomePage();
+
+  final List<Map<String, dynamic>> boards = const [
+    {'name': 'School', 'icon': Icons.school},
+    {'name': 'Daily', 'icon': Icons.chat},
+    {'name': 'Gaming', 'icon': Icons.videogame_asset},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Message Boards")),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text("Menu", style: TextStyle(color: Colors.white, fontSize: 24)),
+            ),
+            ListTile(title: const Text("Boards"), onTap: () => Navigator.pop(context)),
+            ListTile(title: const Text("Profile"), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()))),
+            ListTile(title: const Text("Settings"), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()))),
+          ],
+        ),
+      ),
+      body: ListView.builder(
+        itemCount: boards.length,
+        itemBuilder: (context, i) => Card(
+          margin: const EdgeInsets.all(12),
+          child: ListTile(
+            leading: Icon(boards[i]['icon']),
+            title: Text(boards[i]['name']),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(boardName: boards[i]['name']))),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ChatPage extends StatelessWidget {
+  final String boardName;
+  const ChatPage({required this.boardName});
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = FirebaseFirestore.instance.collection('message_boards').doc(boardName).collection('messages').orderBy('datetime', descending: true);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(boardName)),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder(
+              stream: ref.snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                final docs = snapshot.data!.docs;
+                return ListView.builder(
+                  reverse: true,
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) {
+                    final m = docs[i];
+                    return ListTile(
+                      title: Text(m['message']),
+                      subtitle: Text("${m['username']} • ${m['datetime'].toDate()}"),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          MessageInput(boardName: boardName),
+        ],
+      ),
+    );
+  }
+}
+
+class MessageInput extends StatefulWidget {
+  final String boardName;
+  const MessageInput({required this.boardName});
+  @override
+  State<MessageInput> createState() => _MessageInputState();
+}
+
+class _MessageInputState extends State<MessageInput> {
+  final controller = TextEditingController();
+
+  Future<void> sendMessage() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && controller.text.trim().isNotEmpty) {
+      final uDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      await FirebaseFirestore.instance.collection('message_boards').doc(widget.boardName).collection('messages').add({
+        'message': controller.text.trim(),
+        'username': "${uDoc['firstName']} ${uDoc['lastName']}",
+        'datetime': Timestamp.now(),
+      });
+      controller.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(child: TextField(controller: controller, decoration: const InputDecoration(hintText: "Type message..."))),
+            IconButton(icon: const Icon(Icons.send), onPressed: sendMessage),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Profile Page
+class ProfilePage extends StatefulWidget {
+  const ProfilePage();
+
+  @override
+  _ProfilePageState createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
+
+  Future<void> _loadData() async {
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get();
+    _firstName.text = userDoc['firstName'] ?? '';
+    _lastName.text = userDoc['lastName'] ?? '';
+  }
+
+  Future<void> _save() async {
+    await FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).update({
+      'firstName': _firstName.text.trim(),
+      'lastName': _lastName.text.trim(),
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile updated")));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Profile")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(controller: _firstName, decoration: const InputDecoration(labelText: "First Name")),
+            const SizedBox(height: 12),
+            TextField(controller: _lastName, decoration: const InputDecoration(labelText: "Last Name")),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.save),
+              label: const Text("Save"),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+}
+
+// Settings Page
+class SettingsPage extends StatelessWidget {
+  const SettingsPage();
+
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Settings")),
+      body: Center(
+        child: ElevatedButton.icon(
+          onPressed: () => _logout(context),
+          icon: const Icon(Icons.logout),
+          label: const Text("Logout"),
+        ),
+      ),
     );
   }
 }
