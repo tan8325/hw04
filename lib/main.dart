@@ -231,10 +231,31 @@ class ChatPage extends StatelessWidget {
                   itemCount: docs.length,
                   itemBuilder: (context, i) {
                     final m = docs[i];
-                    return ListTile(
-                      title: Text(m['message']),
-                      subtitle: Text("${m['username']} • ${m['datetime'].toDate()}"),
-                    );
+                    
+                    // Handle both old and new message formats
+                    if (m.data().containsKey('userId')) {
+                      // New format with userId
+                      return FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance.collection('users').doc(m['userId']).get(),
+                        builder: (context, userSnapshot) {
+                          String username = "Loading...";
+                          if (userSnapshot.hasData && userSnapshot.data != null) {
+                            final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                            username = "${userData['firstName']} ${userData['lastName']}";
+                          }
+                          return ListTile(
+                            title: Text(m['message']),
+                            subtitle: Text("$username • ${m['datetime'].toDate()}"),
+                          );
+                        },
+                      );
+                    } else {
+                      // Old format with username directly stored
+                      return ListTile(
+                        title: Text(m['message']),
+                        subtitle: Text("${m['username']} • ${m['datetime'].toDate()}"),
+                      );
+                    }
                   },
                 );
               },
@@ -260,10 +281,9 @@ class _MessageInputState extends State<MessageInput> {
   Future<void> sendMessage() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && controller.text.trim().isNotEmpty) {
-      final uDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       await FirebaseFirestore.instance.collection('message_boards').doc(widget.boardName).collection('messages').add({
         'message': controller.text.trim(),
-        'username': "${uDoc['firstName']} ${uDoc['lastName']}",
+        'userId': user.uid,
         'datetime': Timestamp.now(),
       });
       controller.clear();
